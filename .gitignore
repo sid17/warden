@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtualenv / uv
+.venv/
+.python-version
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Test / tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+
+# Runtime state (never commit generated run data; keep the .gitkeep dir markers)
+data/
+warden/data/*.db
+warden/observability/audit/logs/*.jsonl
+warden/observability/audit/reports/*
+!warden/observability/audit/reports/.gitkeep
+
+# Internal, non-published material (preserved locally, gitignored)
+warden/docs/internal/
+docs/internal/
+
+# Internal tooling cache
+.impeccable/

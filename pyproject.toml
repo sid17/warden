@@ -1,0 +1,84 @@
+# Warden — a tenant-isolated, provider-agnostic agent runtime.
+# Imports are repo-root-relative as `warden.*` (pythonpath = ["."]). NOT installed as
+# a distribution (package = false); the test runner resolves the package via pythonpath.
+[project]
+name = "warden"
+version = "0.1.0"
+description = "Warden — a tenant-isolated, provider-agnostic agent runtime"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11,<3.15"
+dependencies = [
+    "claude-agent-sdk>=0.2.127,<0.3.0",
+    "openharness-ai>=0.1.9,<0.2.0",
+    "aiosqlite>=0.22.1,<0.23.0",
+    "aiohttp>=3.14.1,<4.0.0",
+    "httpx>=0.27.0,<1.0.0",
+    "PyYAML>=6.0.3,<7.0.0",
+    "pydantic>=2.13.4,<3.0.0",
+    "pydantic-settings>=2.14.1,<3.0.0",
+    "boto3>=1.34,<2.0.0",
+    "fastapi>=0.136.1,<0.139.0",
+    "openai-codex>=0.144.4,<0.145.0",
+]
+
+[project.optional-dependencies]
+# Shared-state Postgres backends (EXT-C3 multi-replica), OPTIONAL — default local
+# backends (JSONL / embedded sqlite / filesystem) need no driver. `uv sync --extra postgres`.
+postgres = [
+    "asyncpg>=0.30.0,<0.31.0",
+    "psycopg[binary]>=3.2.0,<4.0.0",
+]
+# Telemetry egress, OPTIONAL and default-OFF. The tracers import these lazily; with
+# the extra uninstalled, telemetry no-ops. `uv sync --extra telemetry`.
+#   * langfuse v2 — the `langfuse.model.ModelUsage` API the Claude/OpenHarness tracers use.
+#   * opentelemetry — the OTEL span/metric egress + OTLP exporter.
+telemetry = [
+    "langfuse>=2.0.0,<3.0.0",
+    "opentelemetry-api>=1.20.0,<2.0.0",
+    "opentelemetry-sdk>=1.20.0,<2.0.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.20.0,<2.0.0",
+]
+
+[dependency-groups]
+# `uv run pytest` installs the dev group; the telemetry + postgres deps are mirrored
+# here (package = false blocks a `warden[...]` self-reference) so the full suite runs
+# green by default without needing `--extra`.
+dev = [
+    "pytest>=9.1.0,<10.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-timeout>=2.3.0",
+    "moto>=5.0.0",
+    "ruff>=0.6.0",
+    "langfuse>=2.0.0,<3.0.0",
+    "opentelemetry-api>=1.20.0,<2.0.0",
+    "opentelemetry-sdk>=1.20.0,<2.0.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.20.0,<2.0.0",
+    "asyncpg>=0.30.0,<0.31.0",
+    "psycopg[binary]>=3.2.0,<4.0.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# v0.1 posture: lint for correctness (pyflakes + syntax), not style. Broader style
+# rules (E/W/I) can be adopted incrementally — the codebase predates them.
+select = ["F", "E9"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["warden/tests"]
+asyncio_mode = "strict"
+addopts = "-m 'not slow and not ollama'"
+markers = [
+    "slow: loads a heavyweight local ML model or hits the network; deselected by default",
+    "ollama: requires a running local Ollama instance; deselected by default",
+    "integration: broader integration test; safe by default but grouped for selection",
+    "asyncio: async test driven by pytest-asyncio",
+    "timeout: per-test wall-clock budget (pytest-timeout)",
+]
