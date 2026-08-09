@@ -317,7 +317,7 @@ def test_tool_confirmation_route_end_to_end():
             status = (await client.get(f"/runs/{run_id}")).json()["status"]
             if status == target:
                 return status
-            await asyncio.sleep(0)
+            await asyncio.sleep(0.05)
         return status
 
     async def _run():
@@ -372,7 +372,7 @@ def test_revise_with_empty_feedback_is_422_at_the_route():
             status = (await client.get(f"/runs/{run_id}")).json()["status"]
             if status == target:
                 return status
-            await asyncio.sleep(0)
+            await asyncio.sleep(0.05)
         return status
 
     async def _run():

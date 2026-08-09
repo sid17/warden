@@ -1,5 +1,9 @@
 # Warden — a tenant-isolated, provider-agnostic agent runtime
 
+[![CI](https://github.com/sid17/warden/actions/workflows/ci.yml/badge.svg)](https://github.com/sid17/warden/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue.svg)](pyproject.toml)
+
 > *Every agent runs under a Warden.* Given `(user_id, task_id)`, a prompt, and a provider,
 > Warden runs an AI agent in an **isolated workspace** under a **fixed permission policy** and
 > **streams typed output** — many runs at once, keyed by `(user_id, task_id)`. You bring the

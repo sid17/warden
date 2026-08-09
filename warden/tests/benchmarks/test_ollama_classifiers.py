@@ -47,7 +47,7 @@ class TestOllamaInputClassifier:
         assert clf.name == "ollama-gemma3-input"
 
     def test_connection_error_raises(self) -> None:
-        clf = OllamaGuardInputClassifier(base_url="http://localhost:99999")
+        clf = OllamaGuardInputClassifier(base_url="http://localhost:59999")
         with pytest.raises(RuntimeError, match="Cannot connect to Ollama"):
             asyncio.run(clf.classify("test"))
 
@@ -58,7 +58,7 @@ class TestOllamaOutputClassifier:
         assert clf.name == "ollama-gemma3-output"
 
     def test_connection_error_raises(self) -> None:
-        clf = OllamaGuardOutputClassifier(base_url="http://localhost:99999")
+        clf = OllamaGuardOutputClassifier(base_url="http://localhost:59999")
         with pytest.raises(RuntimeError, match="Cannot connect to Ollama"):
             asyncio.run(clf.classify("test"))
 
