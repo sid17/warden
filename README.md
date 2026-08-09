@@ -116,7 +116,7 @@ your product code never enters the engine. Playbook:
 | Needs a profile? | yes | usually no |
 
 See [`docs/product_integration.md`](warden/docs/product_integration.md) for when to use each and the
-five-step spine.
+integration spine.
 
 ---
 
