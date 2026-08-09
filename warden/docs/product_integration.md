@@ -109,9 +109,10 @@ interactive, transcript-oriented. The value is the live stream, not a durable ar
 
 ---
 
-## 3. The integration spine (five steps)
+## 3. The integration spine (six steps)
 
-Both shapes share this spine; Shape A adds step 3, Shape B usually skips it.
+Both shapes share this spine; Shape A adds steps 3 **and 4** (profile + provisioning),
+Shape B usually skips them.
 
 1. **Run the harness.** In-process (`from warden.drive.api import ChatAPI`,
    [`05`](./05-app-interaction-patterns.md)) or as a service (the profile-aware entrypoint
@@ -123,11 +124,20 @@ Both shapes share this spine; Shape A adds step 3, Shape B usually skips it.
 3. **Teach it your product — the profile (Shape A).** Ship a `list[CustomTool]` + a seed
    bundle, exposed as `PROFILE` in your package, and point `WARDEN_PROFILE` at its
    fully-qualified module path. Full playbook: [`10-adding-a-profile.md`](./10-adding-a-profile.md).
-4. **Dispatch + consume.** `POST /runs` with your `RunSpec` (`user_id`, `task_id`,
+4. **Provision the workspace (Shape A — the product owns provisioning).** Before dispatching a
+   run whose agent needs your seeded skills/agents/workflows, install them into the run's
+   `(user, task)` workspace: `POST /seeds` (upload the `.tar.gz` bundle → an immutable
+   `seed_ref`) then `POST /provision {user_id, task_id, seed_ref}`. A run that names a workflow
+   the workspace was **not** provisioned with fails the harness's `_assert_provisioned` guard —
+   so provision *before* `POST /runs`. Idempotent + never clobbers produced work. Full contract:
+   [`12` §9](./12-the-runs-api.md); the profile side: [`10` §4–5](./10-adding-a-profile.md).
+   *(The in-process `ChatAPI` path and the bundled mock harness don't expose these routes —
+   they seed the workspace directly; provisioning-over-HTTP is the service path.)*
+5. **Dispatch + consume.** `POST /runs` with your `RunSpec` (`user_id`, `task_id`,
    `session_id?`, `input`, `sink`, optional `budget_usd`/`deadline`/`max_turns`), then consume
    the typed `Event` stream via your sink ([`12` §5–6](./12-the-runs-api.md)). Costs/limits are
    the Governor's ([`06`](./06-resource-governance.md)).
-5. **Handle HITL (if you gate).** On `requires_action`, surface the `permission_request` to a
+6. **Handle HITL (if you gate).** On `requires_action`, surface the `permission_request` to a
    human and resume with `POST /runs/{id}/tool_confirmation` (`approve` / `reject` /
    `revise+feedback`). Mechanism: [`11`](./11-permissions-and-human-in-the-loop.md).
 

@@ -132,7 +132,7 @@ Each folder is a layer or a seam of the model in
 | [`orchestrator/`](warden/orchestrator/) | **L2** | the engine: per-turn lifecycle, sessions, the permission chain |
 | [`safety/`](warden/safety/) · [`persistence/`](warden/persistence/) · [`observability/`](warden/observability/) | **L3** | cross-cutting services that wrap every run |
 | [`drive/`](warden/drive/) | **L4a** | in-process drive paths — `ChatAPI`, CLI |
-| [`harness_api/`](warden/harness_api/) | **L4b** | the HTTP Runs API + the account/billing (keys/spend) wrapper, kept distinct from the engine |
+| [`harness_api/`](warden/harness_api/) | **L4b** | the HTTP Runs API + the account/billing (keys/governance) wrapper, kept distinct from the engine |
 | [`harness_api_mock/`](warden/harness_api_mock/) | — | a wire-faithful mock harness (canned scripts) for $0 deterministic integration testing |
 | [`seams/`](warden/seams/) | **§7** | the policy-injection protocols — permissions · middleware · custom tools |
 | [`schemas/`](warden/schemas/) | **§3** | the typed contracts — events · providers · tool_scope · audit |

@@ -131,9 +131,11 @@ The core provisions a workspace from an opaque bundle; the product decides its c
 
 ### 5. Bring-up → the profile's own `run.sh`
 
-Product-specific docker wiring lives in `harness_api/profiles/<name>/run.sh`, **never** in the generic
+Product-specific docker wiring lives in **your profile package**, beside the profile (e.g.
+`yourco_integration/<product>/real/run.sh`), **never** in the engine's generic
 `docker/run-harness-api.sh` (no product knowledge in the shared bring-up, no product bed
-gate). The pattern:
+gate). Your `run.sh` builds the generic engine image, then bind-mounts your integration
+package + points `WARDEN_PROFILE` at it. The pattern:
 
 - build the **generic** image, then `docker run` it with the profile's uvicorn target
   `warden.harness_api.profiles.serve:app` and `-e WARDEN_PROFILE=<a.b.c>` (the
@@ -156,13 +158,17 @@ backend exactly this way.)
 > product, put the package **in your own repo** (e.g. `yourco_integration/<name>/`) and point
 > `WARDEN_PROFILE` at its dotted module path — the steps are otherwise identical.
 
+A **product** profile lives entirely in your own package (out-of-tree), loaded by a dotted
+`WARDEN_PROFILE`. (A *built-in* profile — like the shipped `example` — instead lives in the
+engine's `harness_api/profiles/<name>/` and is named bare.) For the out-of-tree case:
+
 1. `<pkg>/<name>/__init__.py`, `profile.py` (`PROFILE = Profile(name, build_factory)`).
-2. `harness_api/profiles/<name>/factory.py` — the per-run factory (§3): lazy product import, per-run
+2. `<pkg>/<name>/factory.py` — the per-run factory (§3): lazy product import, per-run
    `ToolContext`, `config.custom_tools.tools = <product tools>`.
 3. Have the product ship a **seed manifest** (copy allowlist + mkdir list) + a bundle
    builder that validates and packs it (§4). Keep product content in the product repo.
-4. `harness_api/profiles/<name>/run.sh` — the bring-up wrapper (§5).
-5. `harness_api/profiles/<name>/README.md` — a short profile readme (this one *may* reference the
+4. `<pkg>/<name>/run.sh` — the bring-up wrapper (§5).
+5. `<pkg>/<name>/README.md` — a short profile readme (this one *may* reference the
    product; the general docs here must not).
 6. Tests (below).
 
