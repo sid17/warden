@@ -20,12 +20,12 @@ def test_defaults():
     assert s.audit_enabled is False
 
 
-def test_phoenix_settings_base_is_clean():
+def test_harness_settings_base_is_clean():
     # database_dsn is a computed field on InfraSettings — must be absent here.
     assert "database_dsn" not in HarnessSettings.model_fields
     assert "mongo_uri" not in HarnessSettings.model_fields
     assert "redis_url" not in HarnessSettings.model_fields
 
 
-def test_inherits_environment_from_phoenix_settings():
+def test_inherits_environment_from_base_settings():
     assert "environment" in HarnessSettings.model_fields

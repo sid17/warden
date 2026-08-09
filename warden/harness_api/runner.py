@@ -1,8 +1,8 @@
 """The concurrent execution engine behind the Runs API.
 
 One ``POST /runs`` becomes one background asyncio task that:
-  1. acquires the per-``(user, task)`` lock (serialize one course) then a global
-     ``Semaphore(N)`` slot (bound concurrency across courses),
+  1. acquires the per-``(user, task)`` lock (serialize one run per key) then a global
+     ``Semaphore(N)`` slot (bound concurrency across ``(user, task)`` pairs),
   2. picks the user's managed key and threads it as ``auth_env`` into one
      ``ChatAPI`` per run (subprocess-isolated via ``claude-cli``),
   3. adapts each ``OrchestratorEvent`` to a typed, ``seq``-stamped :class:`Event`

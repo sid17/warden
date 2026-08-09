@@ -23,9 +23,9 @@ class Sink(BaseModel):
 class RunSpec(BaseModel):
     """``POST /runs`` body — start (or resume) one run.
 
-    ``session_id`` omitted => a new session; supplied => resume it (creation and
-    revision of a course share one session_id; Q&A/notes use their own). Runs on
-    the same ``task_id`` serialize (per-task lock); concurrency is across tasks.
+    ``session_id`` omitted => a new session; supplied => resume it (successive
+    turns of one logical run share a session_id; unrelated work uses its own). Runs
+    on the same ``task_id`` serialize (per-task lock); concurrency is across tasks.
     """
 
     user_id: str
@@ -65,7 +65,7 @@ RunStatus = Literal[
 # time", so the product leaves ``awaiting_confirmation`` for a recoverable ``expired``
 # state (retry re-runs from the gate) instead of a silent failure. An INDEFINITE gate
 # (``hitl.sla_seconds`` None) never emits this — it just stays parked until resumed.
-# EXT-A2/P1 (E4): ``completion`` (course_complete carries the files manifest) +
+# EXT-A2/P1 (E4): ``completion`` (a terminal ``*_complete`` tool carries the files manifest) +
 # a generic ``milestone`` — the FIXED, closed set the workflow's ``event_tool_map``
 # may re-tag a custom-tool call into (with the existing ``checkpoint``). The
 # product's specific phase/kind rides in the opaque ``data``, never a new top-level

@@ -109,7 +109,7 @@ class _ExecMixin:
                 state.status = "error"
                 state.error = reason
                 return
-            # 1. Serialize per course, then take a concurrency slot.
+            # 1. Serialize per (user, task), then take a concurrency slot.
             # (3g.2b: the ungoverned path has NO budget gate — uncapped; budgets are
             # enforced by enabling governance, whose reservation ledger is the gate.)
             async with self._task_lock.hold(spec.user_id, spec.task_id):

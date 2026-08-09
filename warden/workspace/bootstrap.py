@@ -211,7 +211,7 @@ def bootstrap(
             agnostic: the *manifest* supplies the paths; the core knows no product
             nouns. Default empty → existing callers/tests unaffected.
         mkdirs: GENERIC mkdir-list — workspace-relative dirs created empty (the skill
-            WRITES into them, e.g. ``courses``). Default empty.
+            WRITES into them, e.g. ``outputs``). Default empty.
 
     Returns:
         Summary dict: ``{target, skills, agents, workflows, copied, mkdirs, lockfile,

@@ -1,7 +1,7 @@
 """EXT-C3b — the ``(user, task)`` lock: in-process today, distributed for a fleet.
 
-The Runner serializes concurrent runs of one ``(user_id, task_id)`` ("one course at a
-time") with a per-key :class:`asyncio.Lock` — correct within ONE process, but a fleet
+The Runner serializes concurrent runs of one ``(user_id, task_id)`` ("one run per key
+at a time") with a per-key :class:`asyncio.Lock` — correct within ONE process, but a fleet
 of replicas behind a load balancer needs the mutex to span processes: two replicas that
 each receive a submit for the SAME ``(user, task)`` must not run it concurrently.
 

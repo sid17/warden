@@ -742,7 +742,7 @@ if [ -n "$C3_2C" ]; then
     PG="c3pg-$$"
     HOLD="c3hold-$$"
     PG_IMAGE="${C3_PG_IMAGE:-paradedb/paradedb:latest}"
-    DSN="postgresql://phoenix:phoenix_dev@${PG}:5432/harness_c3"
+    DSN="postgresql://warden:warden_dev@${PG}:5432/harness_c3"
 
     # Tear down the ephemeral PG + hold container + network on ANY exit (pass/fail).
     _c3_teardown() {
@@ -757,7 +757,7 @@ if [ -n "$C3_2C" ]; then
 
     echo "    starting throwaway Postgres (harness_c3; NOT the dev DB) ..."
     docker run -d --name "$PG" --network "$NET" \
-        -e POSTGRES_USER=phoenix -e POSTGRES_PASSWORD=phoenix_dev \
+        -e POSTGRES_USER=warden -e POSTGRES_PASSWORD=warden_dev \
         -e POSTGRES_DB=harness_c3 "$PG_IMAGE" >/dev/null
 
     RUNENV=( -e "WARDEN_STATE_BACKEND=postgres" -e "WARDEN_POSTGRES_DSN=${DSN}" )
