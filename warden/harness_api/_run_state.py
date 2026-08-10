@@ -65,6 +65,24 @@ _DUPLICATE_REVISE_REASON = (
     "revised proposal identical to prior — model ignored feedback"
 )
 
+# Empty-resume recovery: a durable resume occasionally returns with NO assistant work —
+# the provider SDK yields only a zero-usage terminal ``status`` message (0 input/output
+# tokens, empty result), no thinking/text/tool_use. This is a KNOWN, still-open upstream
+# bug triggered by interrupt() + a deferred tool + a delegated Task sub-agent settling
+# right before the resume's Result (claude-code #77313 / #76807; claude-agent-sdk #1190,
+# where the continuation control response is dropped). The continuation Stop hook cannot
+# catch it (it only fires on an assistant end_turn), so the run would otherwise emit a
+# spurious empty terminal and end BEFORE its completion tool. When that happens the Runner
+# re-drives the SAME session (up to this many times) with a firm continuation that
+# re-engages the model. Detection keys on ``produced == 0`` (no work-kind message) — NOT a
+# raw message count, since the empty result IS itself a (status) message.
+_DURABLE_RESUME_REDRIVE = (
+    "Your previous step produced no output. Resume the task now: continue from exactly "
+    "where you left off, complete every remaining step in order, and call the "
+    "completion tool as the final step. Do not restart the task. Continue now."
+)
+_MAX_EMPTY_REDRIVES = 2
+
 
 def _durable_http_unsupported_reason(provider: str) -> str:
     """The fail-closed error a non-Claude ``durable_http`` run terminates with."""

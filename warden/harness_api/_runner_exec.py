@@ -19,7 +19,9 @@ from warden.harness_api._run_state import (
     _DURABLE_HTTP_UNSUPPORTED,
     _DURABLE_RESUME_CONTINUATION,
     _DURABLE_RESUME_DENIED,
+    _DURABLE_RESUME_REDRIVE,
     _DURABLE_RESUME_REVISE,
+    _MAX_EMPTY_REDRIVES,
     _RunState,
     _durable_http_unsupported_reason,
     _now,
@@ -45,6 +47,16 @@ from warden.harness_api.run_registry import RunIdentity
 from warden.harness_api.schemas import Event, RunSpec, Sink
 
 logger = logging.getLogger(__name__)
+
+#: MessageEvent ``kind``s that mean the model produced genuine work on a turn (as
+#: opposed to the terminal ``status``/``result`` message every turn ends with). Used to
+#: detect an EMPTY durable resume: a turn whose only message is the zero-usage terminal
+#: status (no thinking/text/tool_use/streamed content) produced NO work. A positive set
+#: is the safe failure mode — a new work-kind not listed here at worst causes a bounded
+#: unnecessary re-drive, never a MISSED empty resume (which the exclusion form would risk).
+_WORK_MESSAGE_KINDS = frozenset(
+    {"text", "thinking", "tool_use", "tool_result", "stream_delta", "stream_end"}
+)
 
 
 class _ExecMixin:
@@ -150,18 +162,12 @@ class _ExecMixin:
         else:
             auth_env = self._auth_resolver.auth_env_for(spec.user_id, spec.provider)
 
-        api = self._factory(spec, auth_env)
-        if run_governor is not None and hasattr(api, "set_governor"):
-            api.set_governor(run_governor)
-        # M6: wire the per-run durable eject (build.py resolved durable_http to a
-        # fail-closed placeholder; the Runner installs the real mechanism here).
-        if self._is_durable_http():
-            self._wire_durable_eject(api, run_id, spec)
         # 07b: a durable resume continues the paused conversation (the SDK re-fires the
         # deferred tool_use_id). Send a neutral continuation there, NOT the restated
         # prompt — restating restarts a multi-tool plan on every resume (defer storm).
         # Decision-aware: a deny tells the model not to retry (else it re-issues the
-        # denied call every resume — a deny storm that never terminates).
+        # denied call every resume — a deny storm that never terminates). Computed once
+        # for the first attempt; the empty-resume guard below overrides it on a re-drive.
         if self._is_durable_http() and state.durable_resumed:
             # E6 three-way, keyed off the recorded mode (reject and revise are both
             # deny-on-the-wire, so only ``last_decision`` — not a bool — distinguishes
@@ -177,45 +183,103 @@ class _ExecMixin:
         else:
             content = str(spec.input.get("prompt") or spec.input.get("content") or "")
         workflow = spec.input.get("workflow")
-        # M6 resume: on the initial pass ``state.session_id`` is None (a fresh/spec
-        # session); on a tool_confirmation re-drive it holds the resolved id, so the
-        # SAME session resumes and the durable handler injects the recorded decision.
-        session_id = state.session_id or spec.session_id
-        await api.init()  # type: ignore[attr-defined]
-        # E3: a run that names input.workflow on a never-provisioned workspace errors
-        # loudly here rather than running ungoverned (checked after init() so a
-        # restored snapshot's manifest counts).
-        self._assert_provisioned(spec)
-        # E4: resolve the run's re-tag map now that the task dir is
-        # restored/provisioned (the manifest is on disk) — a config base merged with
-        # the workflow manifest's event_tool_map (validated at load; a broken manifest
-        # raises WorkflowLoadError → the run errors fail-closed).
-        state.event_tool_map = self._resolve_event_tool_map(spec)
-        try:
-            async for oe in api.send(  # type: ignore[attr-defined]
-                content,
-                session_id=session_id,
-                workflow=workflow,
-            ):
-                await self._handle_event(run_id, egress, state, oe)
-        finally:
-            await api.close()  # type: ignore[attr-defined]
-            # Settle the reservation to the committed run cost. Idempotent + runs in
-            # this ``finally`` on error/stop/CANCEL too, so a hold is never leaked and a
-            # cancel reconciles to the COMMITTED cost (turns that DID complete WERE
-            # spent), not zero — LiteLLM reconciles a cancel to incurred cost. The
-            # terminal path can't double-settle. No-op when ungoverned.
-            if run_governor is not None:
-                await run_governor.settle()
 
-        # M6: a durable eject ends the turn WITHOUT a terminal, leaving a pending
-        # record in the run's store (Claude native defer / OH-Codex deny-to-end).
-        # Detect the pause here → emit the ask + park (slot already freed on return);
-        # else fall through to the normal terminal. Resume re-enters via confirm().
-        if self._is_durable_http() and await self._maybe_pause_durable(
-            run_id, egress, state
-        ):
-            return
+        # A durable resume occasionally comes back EMPTY: the provider SDK yields no
+        # assistant work at all (an intermittent resume glitch — see the loop body). The
+        # continuation Stop hook can't catch it (that only fires on an assistant
+        # end_turn), so without this guard the run emits a spurious empty ``result``
+        # terminal and ends BEFORE its completion tool — the live "result event but no
+        # draft_manifest" course failure. Guard: on such a resume, RE-DRIVE the SAME
+        # session (bounded) with a firm continuation, instead of terminating.
+        empty_redrives = 0
+        while True:
+            api = self._factory(spec, auth_env)
+            if run_governor is not None and hasattr(api, "set_governor"):
+                api.set_governor(run_governor)
+            # M6: wire the per-run durable eject (build.py resolved durable_http to a
+            # fail-closed placeholder; the Runner installs the real mechanism here).
+            if self._is_durable_http():
+                self._wire_durable_eject(api, run_id, spec)
+            # M6 resume: on the initial pass ``state.session_id`` is None (a fresh
+            # session); on a re-drive it holds the resolved id, so the SAME session
+            # resumes and the durable handler injects the recorded decision.
+            session_id = state.session_id or spec.session_id
+            await api.init()  # type: ignore[attr-defined]
+            # E3: a run that names input.workflow on a never-provisioned workspace
+            # errors loudly here rather than running ungoverned (checked after init()
+            # so a restored snapshot's manifest counts).
+            self._assert_provisioned(spec)
+            # E4: resolve the run's re-tag map now that the task dir is
+            # restored/provisioned (the manifest is on disk) — a config base merged
+            # with the workflow manifest's event_tool_map (validated at load; a broken
+            # manifest raises WorkflowLoadError → the run errors fail-closed).
+            state.event_tool_map = self._resolve_event_tool_map(spec)
+            # Count assistant WORK on this turn. An empty resume (the intermittent
+            # provider-SDK glitch — claude-code #77313 / claude-agent-sdk #1190,
+            # triggered by interrupt() + a deferred tool + background subagents) yields
+            # ONLY a zero-usage terminal ``status`` message — no thinking / text /
+            # tool_use / streamed content. A naive MessageEvent count is 1, not 0 (the
+            # empty result IS a status message), so we count only genuine work-kinds;
+            # ``produced == 0`` identifies the empty resume precisely.
+            produced = 0
+            try:
+                async for oe in api.send(  # type: ignore[attr-defined]
+                    content,
+                    session_id=session_id,
+                    workflow=workflow,
+                ):
+                    if (
+                        isinstance(oe, MessageEvent)
+                        and getattr(oe, "kind", None) in _WORK_MESSAGE_KINDS
+                    ):
+                        produced += 1
+                    await self._handle_event(run_id, egress, state, oe)
+            finally:
+                await api.close()  # type: ignore[attr-defined]
+                # Settle THIS attempt's reservation. The Governor's ``pre_flight``
+                # reserves per ``api.send`` (NOT idempotent — it overwrites the held
+                # reservation), so each attempt must settle its own hold; settling only
+                # once after all re-drives would LEAK every prior reservation. Idempotent
+                # per reservation id; no-op when ungoverned; runs on error/stop/cancel
+                # too, so a hold is never leaked.
+                if run_governor is not None:
+                    await run_governor.settle()
+
+            # M6: a durable eject ends the turn WITHOUT a terminal, leaving a pending
+            # record in the run's store (Claude native defer / OH-Codex deny-to-end).
+            # Detect the pause here → emit the ask + park (slot already freed on
+            # return); else fall through. Resume re-enters via confirm().
+            if self._is_durable_http() and await self._maybe_pause_durable(
+                run_id, egress, state
+            ):
+                return
+
+            # Empty-resume recovery: a durable resume that produced no assistant work
+            # and did not pause/stop/error is the glitch — re-drive the SAME session
+            # (bounded) with a firm continuation rather than emit a premature empty
+            # terminal. A Governor halt / error folds in as a non-work event (so
+            # ``produced == 0`` too) but is a REAL terminal — the stopped/error guards
+            # keep us from re-driving (and spending) past it. Gated on a continuation
+            # contract (the run is expected to reach a completion tool) so a
+            # genuinely-done non-continuation run is never re-driven.
+            if (
+                state.durable_resumed
+                and produced == 0
+                and state.stopped_reason is None
+                and state.error is None
+                and self._cfg.engine.continuation.enabled
+                and empty_redrives < _MAX_EMPTY_REDRIVES
+            ):
+                empty_redrives += 1
+                logger.warning(
+                    "run %s: durable resume produced no assistant work (empty "
+                    "resume) — re-driving %d/%d to reach the completion tool",
+                    run_id, empty_redrives, _MAX_EMPTY_REDRIVES,
+                )
+                content = _DURABLE_RESUME_REDRIVE
+                continue
+            break
+
         await self._emit_terminal(run_id, egress, state)
 
     async def _emit_terminal(
